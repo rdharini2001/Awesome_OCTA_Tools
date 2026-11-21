@@ -14,6 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import cv2
 import numpy as np
 from octatools import io
 from octatools.evaluation import dice
@@ -38,21 +39,28 @@ def main() -> int:
     out = Path(tempfile.mkdtemp())
     pattern = str(Path(args.images).resolve() / args.glob)
     subprocess.run([sys.executable, "test.py", "--config_file", str(cfg), "--epoch", "30",
-                    "--Test.data.image.files", pattern, "--Test.save_dir", str(out)], cwd=up, check=True)
+                    "--num_workers", "0", "--Test.data.image.files", pattern, "--Test.save_dir", str(out)], cwd=up, check=True)
 
-    seg = OCTASegmenter()
+    checkpoint = cfg.parent / "checkpoints/30_model.pth"
+    seg = OCTASegmenter(str(checkpoint))
     scores = []
     for f in files:
         theirs = sorted(out.glob(f"*{f.stem}*"))
         if not theirs:
             print(f"{f.name}: no upstream output found in {out}")
-            continue
+            raise RuntimeError(f"Missing upstream output for {f.name}")
         t = io.read_image(theirs[0]) > 0.5
         prob = seg._predict_tile(io.read_image(f), out_size=t.shape)
         mine = remove_small(prob > 0.5, MODEL_MIN_SIZE_PX)
         d = dice(mine, t)
         scores.append(d)
-        print(f"{f.name}: dice(wrapper, upstream) = {d:.4f}")
+        native = seg.segment(io.read_image(f), args.fov_mm).mask
+        h, w = native.shape
+        native_reference = cv2.resize(t.astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST).astype(bool)
+        print(f"{f.name}: Dice at model resolution = {d:.6f}; "
+              f"native masks identical = {np.array_equal(native, native_reference)}")
+        if not np.array_equal(mine, t) or not np.array_equal(native, native_reference):
+            raise AssertionError(f"Wrapper and upstream masks differ for {f.name}")
     if scores:
         print(f"mean {np.mean(scores):.4f} over {len(scores)} images")
     return 0

@@ -55,14 +55,14 @@ def _faz(a):
     for p in io.list_images(a.input):
         img = io.read_image(p)
         if a.method == "diaz":
-            r = detect_faz(preprocess(img, preset("faz", a.fov_mm)).image, a.fov_mm, deep=a.layer == "deep")
+            r = detect_faz(img, a.fov_mm, deep=a.layer == "deep")
             mask, ok, why = r.mask, r.found, r.reason
         else:
             from .vessels import segment_classical
             v = segment_classical(preprocess(img, preset("vessel", a.fov_mm)).image, a.fov_mm)
             r = faz_from_vessels(v.mask, a.fov_mm)
             mask, ok, why = r.mask, r.found, r.reason
-        row = {"file": p.name, "found": ok, "reason": why}
+        row = {"file": p.name, "method": a.method, "found": ok, "reason": why}
         if ok:
             row.update(faz_metrics(mask, a.fov_mm))
             io.save_image(out / f"{p.stem}_faz.png", mask)
@@ -86,7 +86,8 @@ def _run(a):
         img = io.read_image(p)
         res = analyze(img, a.fov_mm, layer=a.layer, vessel_method=a.vessels, faz_method=a.faz_method,
                       eye=a.eye, segmenter=seg, skip_if_rejected=a.skip_rejected)
-        row = {"file": p.name, **res.qc.flat(), **res.faz_stats}
+        row = {"file": p.name, "vessel_method": a.vessels, "faz_method": a.faz_method,
+               **res.qc.flat(), **res.faz_stats}
         for region in ("whole", "parafovea_noFAZ"):
             for k, v in res.biomarkers.get(region, {}).items():
                 row[f"{region}.{k}"] = v
@@ -94,7 +95,8 @@ def _run(a):
         panel = overlay_mask(res.image, res.vessels, alpha=0.35)
         if res.faz is not None:
             panel = overlay_outline(panel, res.faz)
-        io.save_image(out / f"{p.stem}_summary.png", side_by_side(img, res.image, panel))
+        summary = side_by_side(img, panel) if a.vessels == "learned" else side_by_side(img, res.image, panel)
+        io.save_image(out / f"{p.stem}_summary.png", summary)
         print(f"{p.name}: QC {res.qc.grade} ({res.qc.score:.2f})", *res.notes)
     write_csv(out / "results.csv", rows)
     return 0
@@ -142,7 +144,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("vessels", help="segment vessels")
     common(p)
     p.add_argument("--out", required=True)
-    p.add_argument("--method", choices=["classical", "learned"], default="classical")
+    p.add_argument("--method", choices=["learned", "classical"], default="learned",
+                   help="vessel method (default: learned, from OCTA-autosegmentation)")
     p.add_argument("--weights")
     p.add_argument("--device", default="cpu")
     p.add_argument("--smooth-um", type=float, help="Gaussian pre-smoothing for the learned model")
@@ -152,7 +155,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("faz", help="segment the foveal avascular zone")
     common(p)
     p.add_argument("--out", required=True)
-    p.add_argument("--method", choices=["vessels", "diaz"], default="vessels")
+    p.add_argument("--method", choices=["diaz", "vessels"], default="diaz",
+                   help="FAZ method (default: diaz, from FAZ_Extraction)")
     p.add_argument("--layer", choices=["superficial", "deep"], default="superficial")
     p.set_defaults(fn=_faz)
 
@@ -160,8 +164,10 @@ def main(argv=None) -> int:
     common(p)
     p.add_argument("--out", required=True)
     p.add_argument("--layer", choices=["superficial", "deep"], default="superficial")
-    p.add_argument("--vessels", choices=["classical", "learned"], default="classical")
-    p.add_argument("--faz-method", choices=["vessels", "diaz"], default="vessels")
+    p.add_argument("--vessels", choices=["learned", "classical"], default="learned",
+                   help="vessel method (default: learned, from OCTA-autosegmentation)")
+    p.add_argument("--faz-method", choices=["diaz", "vessels"], default="diaz",
+                   help="FAZ method (default: diaz, from FAZ_Extraction)")
     p.add_argument("--eye", choices=["OD", "OS"])
     p.add_argument("--weights")
     p.add_argument("--device", default="cpu")

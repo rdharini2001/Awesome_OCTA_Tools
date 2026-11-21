@@ -6,8 +6,9 @@ scans resampled to 1216 x 1216, so larger fields are cut into 3 mm tiles.
 
 Preprocessing follows the authors' test configuration: grayscale, min-max
 scaling, bilinear resize to 1216, sigmoid, 0.5 threshold, removal of objects
-below 128 pixels at the model resolution. The authors' rotate-and-flip step
-cancels out for a square image, so it is not repeated here.
+below 128 pixels at the model resolution. The transpose introduced by the
+authors' image reader is cancelled by their rotation and flip; arrays here
+already use row-column image coordinates.
 
 Original code: https://github.com/aiforvision/OCTA-autosegmentation (MIT).
 """
@@ -30,7 +31,9 @@ def _import_torch():
         import torch
         from monai.networks.nets import DynUNet
     except ImportError as e:  # pragma: no cover
-        raise ImportError("the learned segmenter needs torch and monai: pip install 'octatools[deep]'") from e
+        raise ImportError("the default vessel model needs torch and monai: "
+                          "install with python -m pip install -e '.[deep]', or explicitly "
+                          "select classical vessel segmentation") from e
     return torch, DynUNet
 
 
@@ -97,9 +100,25 @@ class OCTASegmenter:
         """
         if smooth_sigma_um:
             img = ndi.gaussian_filter(img, smooth_sigma_um / pixel_size_um(img.shape, fov_mm))
+        # The published model thresholds and removes small objects at 1216 px.
+        # Keep that order before returning a mask on the caller's pixel grid.
+        if fov_mm <= TRAIN_FOV_MM * 1.05:
+            import cv2
+            model_prob = self._predict_tile(img, out_size=(MODEL_SIZE, MODEL_SIZE))
+            model_mask = remove_small(model_prob > threshold, MODEL_MIN_SIZE_PX)
+            h, w = img.shape
+            prob = self.torch.nn.functional.interpolate(
+                self.torch.from_numpy(model_prob)[None, None], size=(h, w),
+                mode="bilinear", align_corners=False,
+            )[0, 0].numpy()
+            mask = cv2.resize(model_mask.astype(np.uint8), (w, h),
+                              interpolation=cv2.INTER_NEAREST).astype(bool)
+            return VesselSegmentation(mask, prob.astype(np.float32), "kreitner2024")
+
         prob = self.predict_proba(img, fov_mm, tile_overlap)
         mask = prob > threshold
-        # keep the authors' filter size, expressed as an area so it holds at any resolution
+        # Larger fields blend tile probabilities on the input grid. Scale the
+        # cleanup area to that grid; tiling is an extension of the upstream model.
         eff_px = min(fov_mm, TRAIN_FOV_MM) * 1000.0 / MODEL_SIZE
         min_px = max(1, int(round(MODEL_MIN_SIZE_PX * eff_px ** 2 / pixel_size_um(img.shape, fov_mm) ** 2)))
         mask = remove_small(mask, min_px)

@@ -127,7 +127,7 @@ def _grow(im: np.ndarray, reg: np.ndarray, area_mm2: float, deep: bool, precisio
 
 
 def detect_faz(img: np.ndarray, fov_mm: float, *, deep: bool = False, precision: float = 0.7,
-               work_size: int | None = WORK_SIZE) -> DiazResult:
+               work_size: int | None = None) -> DiazResult:
     """Segment the FAZ in a superficial (deep=False) or deep (deep=True) slab.
 
     Args:
@@ -136,8 +136,9 @@ def detect_faz(img: np.ndarray, fov_mm: float, *, deep: bool = False, precision:
             constants were not tuned for them.
         precision: 0..1, how permissive the region growing is. 0.7 is the
             value used in the authors' example.
-        work_size: resize to this side length first (None keeps the input
-            size). The constants assume about 320 px.
+        work_size: optionally resize to this side length first. The default
+            None preserves the native resolution, as in FAZ_Extraction.
+            Set 320 explicitly to work at the OCTAGON reference size.
     """
     h0, w0 = img.shape
     work = img.astype(np.float64)

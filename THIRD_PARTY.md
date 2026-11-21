@@ -4,7 +4,7 @@ This repository includes a port of an existing FAZ detector, an inference wrappe
 
 ## FAZ detection: Díaz et al.
 
-`src/octatools/faz/diaz.py` is a Python 3 port of the FAZ extraction method and code by Macarena Díaz and colleagues.
+`src/octatools/faz/diaz.py` is a Python 3 port of the FAZ extraction method and code by Macarena Díaz and colleagues, based on upstream commit `4b312ef0dd3b97b9b993d29f0b02d0994e8d9b2e`. This detector is the default FAZ method in the CLI and full pipeline. It runs on the source image at its native resolution.
 
 - Code: <https://github.com/macarenadiaz/FAZ_Extraction>
 - M. Díaz, J. Novo, P. Cutrín, F. Gómez-Ulla, M. G. Penedo, M. Ortega. *Automatic segmentation of the foveal avascular zone in ophthalmological OCT-A images.* PLoS ONE 14(2): e0212364, 2019. <https://doi.org/10.1371/journal.pone.0212364>
@@ -16,7 +16,7 @@ The OCTAGON dataset that goes with the method is available from the authors on r
 
 ## Vessel segmentation: Kreitner et al.
 
-`src/octatools/vessels/synthetic.py` runs the network of Kreitner et al. The wrapper reimplements the authors’ inference steps; model weights are obtained separately. The weights are downloaded from the authors' repository at a fixed commit and verified by hash.
+`src/octatools/vessels/synthetic.py` runs the network of Kreitner et al. The wrapper reimplements the authors’ inference steps; model weights are obtained separately. The weights come from upstream commit `9cdc3137b6f55ae766dcae76c166ccf9774daf2b` and are verified by hash. This model is the default vessel method in the CLI and full pipeline. You can use a matching local checkpoint with `--weights` instead of downloading another copy.
 
 - Code and weights: <https://github.com/aiforvision/OCTA-autosegmentation> (MIT, © 2023 Linus Kreitner; licence copy in `third_party/LICENSE-OCTA-autosegmentation`)
 - L. Kreitner, J. C. Paetzold, N. Rauch, C. Chen, A. M. Hagag, A. E. Fayed, S. Sivaprasad, S. Rausch, J. Weichsel, B. H. Menze, M. Harders, B. Knier, D. Rueckert, M. J. Menten. *Synthetic optical coherence tomography angiographs for detailed retinal vessel segmentation without human annotations.* IEEE Transactions on Medical Imaging 43(6): 2061–2073, 2024. <https://doi.org/10.1109/TMI.2024.3354408>

@@ -159,13 +159,12 @@ def qc():
 
 def pipeline():
     from octatools.faz import detect_faz, faz_metrics
-    from octatools.preprocessing import preprocess, preset
     from octatools.vessels import OCTASegmenter
     from octatools.viz import overlay_mask, overlay_outline
     img = io.read_image(SAMPLE)
-    a = analyze(img, 3.0, eye="OD")
-    seg = OCTASegmenter().segment(a.image, 3.0)
-    diaz = detect_faz(preprocess(img, preset("faz", 3.0)).image, 3.0)
+    a = analyze(img, 3.0, eye="OD", vessel_method="classical", faz_method="vessels")
+    seg = OCTASegmenter().segment(img, 3.0)
+    diaz = detect_faz(img, 3.0)
     f_v = faz_metrics(a.faz, 3.0)["area_mm2"]
     f_d = faz_metrics(diaz.mask, 3.0)["area_mm2"]
     both = overlay_outline(overlay_outline(a.image, a.faz, color=(0.435, 0.655, 0.435), width=2),

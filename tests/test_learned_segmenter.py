@@ -44,3 +44,16 @@ def test_tile_helpers():
     assert _tile_starts(200, 100, 0) == [0, 100]
     assert _tile_starts(200, 100, 0.5) == [0, 50, 100]
     assert _tile_starts(250, 100, 0) == [0, 75, 150]
+
+
+def test_default_analysis_uses_loaded_upstream_model(segmenter, sample):
+    from octatools.analyze import analyze
+    from octatools.faz import detect_faz
+
+    img, _ = sample
+    result = analyze(img, 3.0, segmenter=segmenter)
+    expected = segmenter.segment(img, 3.0)
+    expected_faz = detect_faz(img, 3.0)
+    assert np.array_equal(result.vessels, expected.mask)
+    assert expected_faz.found and np.array_equal(result.faz, expected_faz.mask)
+    assert "whole" in result.biomarkers

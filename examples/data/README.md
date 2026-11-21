@@ -4,7 +4,7 @@ This folder contains three simulated 3 × 3 mm OCTA images at 304 × 304 pixels 
 
 These are generated images rather than patient scans. They come from the training domain of the learned vessel model, so use them to check installation and understand the outputs. They cannot establish performance on clinical data.
 
-From the repository root, run the default example:
+Install the package with `python -m pip install -e ".[deep]"`. From the repository root, run the default example, which uses the pretrained OCTA-autosegmentation model and the Díaz FAZ detector:
 
 ```bash
 python examples/quickstart.py

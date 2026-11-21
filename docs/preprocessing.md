@@ -1,6 +1,6 @@
 # Preprocessing
 
-[`octatools.preprocessing`](../src/octatools/preprocessing) prepares en-face images for segmentation. You can use each operation independently or apply a preset that combines them in a fixed order. Start with a preset, inspect the result, and adjust only the steps that help your data.
+[`octatools.preprocessing`](../src/octatools/preprocessing) prepares en-face images for segmentation. You can use each operation independently or apply a preset that combines them in a fixed order. The default upstream vessel and FAZ methods apply their own preparation and do not use these presets automatically. Use a preset for the classical alternatives, or when deliberately testing additional preparation. Inspect the result and keep only the steps that help your data.
 
 ```python
 from octatools import io
@@ -82,7 +82,7 @@ Real projection removal works on the volume (Zhang et al. 2016, Campbell et al. 
 | preset | destripe | denoise | flatten | stretch | for |
 |---|---|---|---|---|---|
 | `vessel` | yes | non-local means | 0.6 mm | 1–99.5 % | vessel segmentation |
-| `faz` | yes | Gaussian σ 1.5 px | 0.8 mm | 1–99.5 % | FAZ detection, where fewer, smoother edges help |
+| `faz` | yes | Gaussian σ 1.5 px | 0.8 mm | 1–99.5 % | Optional preparation for FAZ experiments; the default Díaz path uses the source image. |
 | `minimal` | no | none | none | none | already-clean data |
 
 Build your own with `PreprocessConfig(...)` or override one setting: `preset("vessel", 6.0, denoise=None)`. The recipe is a frozen dataclass, so you can print it and store it next to your results.

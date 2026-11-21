@@ -1,6 +1,6 @@
 # Foveal avascular zone
 
-The foveal avascular zone (FAZ) is the central capillary-free region of the macula. This module estimates its outline and measures its area and shape. Two detectors are available: one works on image intensities and edges, and the other works on a vessel mask. Comparing their outlines can help identify scans that need closer review.
+The foveal avascular zone (FAZ) is the central capillary-free region of the macula. This module estimates its outline and measures its area and shape. The default detector is a Python 3/OpenCV 4 port of the method in FAZ_Extraction by Díaz et al. It works on image intensities and edges. A second detector works on a vessel mask and must be selected explicitly. Comparing their outlines can help identify scans that need closer review.
 
 | | `detect_faz` | `faz_from_vessels` |
 |---|---|---|
@@ -12,25 +12,17 @@ The foveal avascular zone (FAZ) is the central capillary-free region of the macu
 
 ```python
 from octatools import io
-from octatools.faz import detect_faz, faz_from_vessels, faz_metrics
-from octatools.preprocessing import preprocess, preset
-from octatools.vessels import segment_classical
+from octatools.faz import detect_faz, faz_metrics
 
 img = io.read_image("examples/data/synthetic_20230216_232653.png")
 fov_mm = 3.0
+result = detect_faz(img, fov_mm=fov_mm, deep=False)
 
-# 1. Díaz et al. on the preprocessed image
-res = detect_faz(preprocess(img, preset("faz", fov_mm)).image, fov_mm=fov_mm, deep=False)
-res.found, res.area_mm2, res.mask
-
-# 2. from any vessel mask
-vessels = segment_classical(preprocess(img, preset("vessel", fov_mm)).image, fov_mm).mask
-res2 = faz_from_vessels(vessels, fov_mm=fov_mm)
-
-if res2.found:
-    print(faz_metrics(res2.mask, fov_mm=fov_mm))
+if result.found:
+    io.save_image("outputs/faz_mask.png", result.mask)
+    print(faz_metrics(result.mask, fov_mm=fov_mm))
 else:
-    print("FAZ not found:", res2.reason)
+    print("FAZ not found:", result.reason)
 ```
 
 Run the example from the repository root. Both detectors return a result with a `found` flag and a `reason` when detection fails. Check `found` before using a mask for measurements. A successful detection still needs visual review.
@@ -38,10 +30,10 @@ Run the example from the repository root. Both detectors return a result with a 
 For a complete command-line example, run:
 
 ```bash
-octatools faz examples/data/synthetic_20230216_232653.png --fov-mm 3 --method vessels --out outputs/faz
+octatools faz examples/data/synthetic_20230216_232653.png --fov-mm 3 --out outputs/faz
 ```
 
-The command writes `faz.csv`, including a success flag and failure reason for each image. When detection succeeds, it also saves `<name>_faz.png` and `<name>_faz_overlay.png`. Use `--method diaz` to try the image-based detector, and add `--layer deep` when applying that detector to a deep-slab export. The command accepts source OCTA images; `--method vessels` generates its own classical vessel mask. To supply an existing vessel mask, use `faz_from_vessels` in Python.
+The command writes `faz.csv`, including a success flag and failure reason for each image. When detection succeeds, it also saves `<name>_faz.png` and `<name>_faz_overlay.png`. The command uses `--method diaz` by default. Add `--layer deep` for a deep-slab export, or select `--method vessels` to try the alternative vessel-mask detector. The command accepts source OCTA images; `--method vessels` generates its own classical vessel mask. To supply an existing vessel mask, use `faz_from_vessels` in Python.
 
 ## Díaz et al. method
 
@@ -59,7 +51,7 @@ What changed in this port, and what did not, is listed at the top of [`diaz.py`]
 
 **`precision`** (0 to 1) controls how freely the region grows. The authors' example uses 0.7. Lower is more conservative.
 
-**`work_size`** (default 320) resizes the input before running. The kernel sizes and the edge threshold in the original code assume roughly that size. At very different sizes they act on a different physical scale. Set `work_size=None` if you have a reason to run at the native size.
+**`work_size`** defaults to `None`, so the detector runs at the input’s native resolution, as the original FAZ_Extraction example does. The original constants were developed around 320 × 320 images. You can explicitly set `work_size=320` to resample to that working size, but this changes the input and can change the outline. The default CLI and full pipeline pass the source image directly, without the package’s extra FAZ preprocessing preset.
 
 ### Know the limits
 
@@ -68,6 +60,22 @@ What changed in this port, and what did not, is listed at the top of [`diaz.py`]
 - Always look at an overlay. `octatools faz` writes one whenever detection succeeds.
 
 ## Vessel-mask method
+
+This alternative is available through `--method vessels` or `faz_from_vessels` in Python. It is separate from the default Díaz detector. For example, after loading `img` and setting `fov_mm` as above, you can generate a classical vessel mask and measure its central avascular region:
+
+```python
+from octatools.faz import faz_from_vessels
+from octatools.preprocessing import preprocess, preset
+from octatools.vessels import segment_classical
+
+pre = preprocess(img, preset("vessel", fov_mm))
+vessels = segment_classical(pre.image, fov_mm).mask
+alternative = faz_from_vessels(vessels, fov_mm)
+if alternative.found:
+    print(faz_metrics(alternative.mask, fov_mm))
+else:
+    print("FAZ not found:", alternative.reason)
+```
 
 `faz_from_vessels` uses the spacing between segmented vessels to identify a central avascular region. It follows four steps:
 
@@ -98,6 +106,16 @@ Only the largest connected region counts.
 ### Lateral scale and axial length
 
 Area depends on the eye through ocular magnification. `scale_area_by_axial_length(area, axial_length_mm, reference_axial_length_mm)` applies the Bennett et al. (1994) relation, with lateral scale proportional to (AL − 1.82), squared for areas. The reference value is the axial length of the device's model eye; look it up in the device documentation. Linderman et al. (2017) and Sampson et al. (2017) show how large the effect can be.
+
+## Compare the port with the original code
+
+With a local copy of FAZ_Extraction, run:
+
+```bash
+python scripts/verify_faz_against_upstream.py --upstream /path/to/FAZ_Extraction
+```
+
+The script reads the original source without changing it. It applies compatibility adjustments for Python 3 and OpenCV 4, skips drawing calls, and compares the masks and contour areas for the four bundled 3 mm and 6 mm superficial and deep images.
 
 ## Checking results
 

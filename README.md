@@ -16,7 +16,9 @@
   <img src="assets/pipeline_example.png" width="98%" alt="A simulated OCTA scan through the pipeline: input, preprocessing, classical and learned vessel masks, and two FAZ outlines.">
 </p>
 
-**Fig. 1 | One scan through the pipeline.** One simulated 3 × 3 mm scan from [Kreitner et al.](https://github.com/aiforvision/OCTA-autosegmentation). **a**, Input image with its quality grade and score (scale bar, 0.5 mm). **b**, After line repair, non-local-means denoising and background flattening. **c**, Classical vessel mask (Sato filter, hysteresis threshold) with its area density. **d**, Mask from the learned network. **e**, FAZ outlines from the vessel-mask method (green) and the method of Díaz et al. (orange), with their areas. Rebuild with `python scripts/make_figures.py pipeline`.
+**Fig. 1 | Comparing segmentation methods on one scan.** One simulated 3 × 3 mm scan from [Kreitner et al.](https://github.com/aiforvision/OCTA-autosegmentation). **a**, Input image with its quality grade and score (scale bar, 0.5 mm). **b**, After line repair, non-local-means denoising and background flattening. **c**, Classical vessel mask (Sato filter, hysteresis threshold) with its area density. **d**, Mask from the pretrained OCTA-autosegmentation network, applied directly to the source image. **e**, FAZ outlines from the vessel-mask alternative (green) and the default Díaz method applied to the source image (orange), with their areas. The default analysis uses the methods shown in panels d and e; panels b and c show the classical alternative. Rebuild with `python scripts/make_figures.py pipeline`.
+
+The default analysis uses the pretrained vessel model from [OCTA-autosegmentation](https://github.com/aiforvision/OCTA-autosegmentation) and the Díaz FAZ detector from [FAZ_Extraction](https://github.com/macarenadiaz/FAZ_Extraction). The package provides a Python inference wrapper for the vessel model and a Python 3/OpenCV 4 port of the FAZ detector. Both methods receive the source image and apply their own preparation steps. Classical vessel filtering and FAZ detection from a vessel mask remain available when selected explicitly.
 
 An OCTA analysis usually starts with four tasks: checking image quality, preparing the image, identifying vessels and the foveal avascular zone (FAZ), and measuring their properties. Choices at each stage affect the final measurements. Awesome OCTA Tools brings these tasks together in a Python package, with separate modules that you can use independently or as a complete pipeline. Each guide explains the method, shows how to run it, and describes how to interpret its output. If you are new to OCTA, start with the [OCTA primer](docs/octa_primer.md).
 
@@ -49,24 +51,25 @@ git clone https://github.com/rdharini2001/Awesome_OCTA_Tools.git
 cd Awesome_OCTA_Tools
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
+python -m pip install -e ".[deep]"
+octatools weights
 ```
 
 On Windows, activate the environment with `.venv\Scripts\activate` instead. Keep the environment active when running the commands below.
 
-The core installation includes everything needed for the classical analysis. Try it on an included simulated scan:
+The installation includes PyTorch and MONAI for the vessel model. `octatools weights` downloads the authors’ checkpoint once and verifies its hash. Try both upstream methods on an included simulated scan:
 
 ```bash
 python examples/quickstart.py
 ```
 
-The example prints the quality grade, FAZ measurements when a FAZ is found, and vessel measurements for several regions. It uses classical vessel segmentation and does not download model weights. To save a results table and images that you can inspect, run:
+The example prints the quality grade, FAZ measurements when a FAZ is found, and vessel measurements for several regions. It uses the pretrained vessel model and the Díaz FAZ detector. After the checkpoint is cached, inference does not need another download. To save a results table and images that you can inspect, run:
 
 ```bash
 octatools run examples/data/synthetic_20230216_232653.png --fov-mm 3 --eye OD --out outputs/example
 ```
 
-Open `outputs/example/results.csv` for the measurements and `outputs/example/synthetic_20230216_232653_summary.png` for a panel showing the original image, the preprocessed image, and the segmentation overlay. Check the overlay before interpreting the numbers. The sample is simulated and demonstrates how the software works; it does not establish accuracy on patient scans.
+Open `outputs/example/results.csv` for the measurements and `outputs/example/synthetic_20230216_232653_summary.png` for a panel showing the original image and the segmentation overlay. Check the overlay before interpreting the numbers. The sample is simulated and demonstrates how the software works; it does not establish accuracy on patient scans.
 
 ### Prepare your own images
 
@@ -83,12 +86,12 @@ These examples assume `scans/` contains 6 × 6 mm images. Each command starts fr
 ```bash
 octatools qc scans/ --fov-mm 6 --csv outputs/qc.csv
 octatools preprocess scans/ --fov-mm 6 --preset vessel --out outputs/pre
-octatools vessels scans/ --fov-mm 6 --method classical --preprocess --out outputs/vessels
-octatools faz scans/ --fov-mm 6 --method vessels --out outputs/faz
+octatools vessels scans/ --fov-mm 6 --out outputs/vessels
+octatools faz scans/ --fov-mm 6 --out outputs/faz
 octatools run scans/ --fov-mm 6 --eye OD --skip-rejected --out outputs/all
 ```
 
-The `vessels` command preprocesses its input only when you add `--preprocess`. The `faz` and `run` commands apply their own preprocessing. The full pipeline records QC for every image and continues with rejected images unless you add `--skip-rejected`. Use `OD` for a right eye and `OS` for a left eye, and process the two eyes separately when setting this option for a folder.
+The `vessels` command defaults to `--method learned`, and `faz` defaults to `--method diaz`. The full pipeline uses the same defaults. Each upstream method applies its own input preparation; the default path does not add denoising, background flattening, or contrast stretching. The standalone `vessels` command can apply the package’s additional preprocessing if you explicitly add `--preprocess`. The full pipeline records QC for every image and continues with rejected images unless you add `--skip-rejected`. Use `OD` for a right eye and `OS` for a left eye, and process the two eyes separately when setting this option for a folder.
 
 There is no separate biomarkers command. `octatools run` writes whole-image and FAZ-excluded parafoveal measurements to `results.csv`; the Python API provides the full set of regions. For details on saved files and options, see the [running guide](docs/running.md), or use `octatools <command> --help`.
 
@@ -113,17 +116,23 @@ else:
 
 The module guides show how to call each stage separately and adjust its settings.
 
-### Add the learned vessel model
+### Use existing weights or choose an alternative
 
-Install the optional dependencies and download the pretrained weights before running inference:
+The default vessel model uses the authors’ `ves_seg-S-GAN` checkpoint. If you already have the original project on disk, point to that checkpoint directly:
 
 ```bash
-python -m pip install -e ".[deep]"
-octatools weights
-octatools vessels scans/ --fov-mm 6 --method learned --out outputs/learned
+octatools run scans/ --fov-mm 6 --weights /path/to/OCTA-autosegmentation/docker/trained_models/ves_seg-S-GAN/checkpoints/30_model.pth --out outputs/all
 ```
 
-The first download requires internet access. Inference uses the CPU by default; use `--device cuda` if your PyTorch installation supports an available CUDA GPU. See the [vessel segmentation guide](docs/vessel_segmentation.md) for training-domain limits, tiling, and weight-cache settings.
+The checkpoint must match the published model and is verified by SHA-256. Inference uses the CPU by default; use `--device cuda` with a compatible PyTorch installation and an available GPU. See the [vessel segmentation guide](docs/vessel_segmentation.md) for training-domain limits, tiling, and cache settings.
+
+For a lightweight installation, `python -m pip install -e .` supports QC, preprocessing, Díaz FAZ detection, and classical vessel segmentation. To run the alternative full pipeline without the learned model, select it explicitly:
+
+```bash
+octatools run scans/ --fov-mm 6 --vessels classical --faz-method vessels --out outputs/classical
+```
+
+The package does not silently substitute a different algorithm if model dependencies or weights are unavailable.
 
 ## Quality control
 
@@ -139,7 +148,7 @@ The cut-offs are starting points set from simulations and checked by eye, not va
 
 ## Interpret the results
 
-- **Treat automatic FAZ outlines as proposals.** The two detectors can differ noticeably even on a clean scan (0.37 and 0.55 mm² on the example in Fig. 1), and more on weak ones. Always look at the overlay. See [docs/faz.md](docs/faz.md).
+- **Treat automatic FAZ outlines as proposals.** The two detectors can differ noticeably even on a clean scan (as illustrated in Fig. 1), and more on weak ones. Always look at the overlay. See [docs/faz.md](docs/faz.md).
 - **The learned vessel model was trained on 3 × 3 mm scans.** Larger fields are tiled. The bundled example images are from its own simulated training domain and say nothing about accuracy on patients. See [docs/vessel_segmentation.md](docs/vessel_segmentation.md).
 - **The classical vessel defaults were selected using three simulated images.** Inspect their results on your own scans before choosing the settings for an analysis.
 - **Vessel density depends on the pipeline** (threshold, filtering, signal strength, slab definition, axial length). Compare numbers only between runs that share all of these.
@@ -153,9 +162,10 @@ pytest -m "not deep and not network"       # core tests without model downloads
 pytest -m deep                             # learned model; needs torch, monai and the weights
 python scripts/make_figures.py             # rebuilds everything in assets/
 python scripts/verify_against_upstream.py --upstream /path/to/OCTA-autosegmentation --images examples/data
+python scripts/verify_faz_against_upstream.py --upstream /path/to/FAZ_Extraction
 ```
 
-The last script runs the authors' own `test.py` and the wrapper in this repository on the same images. On the three example images the masks agree exactly (Dice 1.0000 at the model's 1216 × 1216 resolution). The tests also use procedural images and simple shapes with known properties to check areas, densities, skeleton lengths, and fractal dimensions. These checks test implementation behavior; they do not establish performance on clinical images.
+The vessel comparison runs the authors’ own `test.py` and the wrapper on the same images. The FAZ comparison runs the original code with Python 3/OpenCV 4 compatibility adjustments and checks masks and contour areas on its four bundled scans. On the three example images the masks agree exactly (Dice 1.0000 at the model's 1216 × 1216 resolution). The tests also use procedural images and simple shapes with known properties to check areas, densities, skeleton lengths, and fractal dimensions. These checks test implementation behavior; they do not establish performance on clinical images.
 
 ## Layout
 

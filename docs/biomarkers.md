@@ -4,16 +4,14 @@
 
 ```python
 from octatools import io
-from octatools.preprocessing import preprocess, preset
-from octatools.vessels import segment_classical
-from octatools.faz import faz_from_vessels
+from octatools.vessels import OCTASegmenter
+from octatools.faz import detect_faz
 from octatools.biomarkers import quantify, vessel_metrics, etdrs_regions
 
 img = io.read_image("examples/data/synthetic_20230216_232653.png")
 fov_mm = 3.0
-pre = preprocess(img, preset("vessel", fov_mm))
-vessels = segment_classical(pre.image, fov_mm).mask
-faz = faz_from_vessels(vessels, fov_mm)
+vessels = OCTASegmenter().segment(img, fov_mm).mask
+faz = detect_faz(img, fov_mm)
 faz_mask = faz.mask if faz.found else None
 
 table = quantify(vessels, fov_mm=fov_mm, faz=faz_mask, eye="OD")
@@ -26,7 +24,7 @@ regions = etdrs_regions(vessels.shape, fov_mm)
 print(vessel_metrics(vessels, fov_mm, roi=regions["parafovea"], exclude=faz_mask))
 ```
 
-Run the example from the repository root after installing the core package. `vessels` must be a 2-D boolean mask in which `True` means vessel. Any FAZ or region mask must use the same shape and pixel coordinates. If you load a saved black-and-white mask, convert it explicitly with `io.read_image("vessels.png") > 0.5`.
+Run the example from the repository root after installing the package with `python -m pip install -e ".[deep]"`. This example uses the same vessel and FAZ methods as the default pipeline. `vessels` must be a 2-D boolean mask in which `True` means vessel. Any FAZ or region mask must use the same shape and pixel coordinates. If you load a saved black-and-white mask, convert it explicitly with `io.read_image("vessels.png") > 0.5`.
 
 `quantify` returns a dictionary of region names, each containing a dictionary of measurements. Density fractions are between 0 and 1; multiply by 100 to express them as percentages. Regions ending in `_noFAZ` are available only when a FAZ mask is supplied.
 

@@ -1,4 +1,7 @@
-"""Run the whole chain on one image and print the numbers.
+"""Run the pretrained vessel model and the Díaz FAZ detector on one image.
+
+Install with python -m pip install -e ".[deep]" before running this example.
+The first run downloads the authors’ vessel checkpoint if it is not cached.
 
     python examples/quickstart.py [path/to/image.png] [fov_mm]
 """
