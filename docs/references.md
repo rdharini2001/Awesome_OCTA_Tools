@@ -1,6 +1,6 @@
 # References
 
-Grouped by topic. DOIs were checked against Crossref.
+The references below are grouped by topic. The module guides cite these papers when explaining an algorithm, a measurement convention, or a limitation. Start with the reviews in the first section for broader background, and use the later sections to find the source of a particular method.
 
 ## OCTA: principles, anatomy, reviews
 

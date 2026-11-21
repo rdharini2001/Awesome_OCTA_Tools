@@ -2,7 +2,7 @@
 
 <p align="center">
   Quality control, preprocessing, FAZ and vessel segmentation, and biomarkers for en-face OCT angiography,<br>
-  with the theory written down next to the code.
+  with practical examples and explanations of the methods behind each step.
 </p>
 
 <p align="center">
@@ -18,21 +18,21 @@
 
 **Fig. 1 | One scan through the pipeline.** One simulated 3 × 3 mm scan from [Kreitner et al.](https://github.com/aiforvision/OCTA-autosegmentation). **a**, Input image with its quality grade and score (scale bar, 0.5 mm). **b**, After line repair, non-local-means denoising and background flattening. **c**, Classical vessel mask (Sato filter, hysteresis threshold) with its area density. **d**, Mask from the learned network. **e**, FAZ outlines from the vessel-mask method (green) and the method of Díaz et al. (orange), with their areas. Rebuild with `python scripts/make_figures.py pipeline`.
 
-Most OCTA papers quietly repeat the same four steps: decide which images are usable, clean them up, find the vessels and the foveal avascular zone, then turn masks into numbers. Each step has literature behind it and each hides choices that move the result. This repository puts those steps in small, separate, tested modules, says where each choice comes from, and keeps a plain-language [primer](docs/octa_primer.md) next to them for anyone new to the modality.
+An OCTA analysis usually starts with four tasks: checking image quality, preparing the image, identifying vessels and the foveal avascular zone (FAZ), and measuring their properties. Choices at each stage affect the final measurements. Awesome OCTA Tools brings these tasks together in a Python package, with separate modules that you can use independently or as a complete pipeline. Each guide explains the method, shows how to run it, and describes how to interpret its output. If you are new to OCTA, start with the [OCTA primer](docs/octa_primer.md).
 
 It works on **single 2-D en-face slabs** (a superficial or deep image exported from the scanner). It does not read raw OCTA volumes or draw layer boundaries.
 
-## What is in here
+## Choose a module
 
 | Module | What it does | Read |
 |---|---|---|
-| `octatools.qc` | Scores an image and says why: line and motion artifacts, blink bands, noise, blur, contrast, saturation, optional projection check, optional device signal strength. Can fit its thresholds to your own grades. | [docs/qc.md](docs/qc.md) |
-| `octatools.preprocessing` | Valid-pixel mask, line repair, denoising (six methods), background flattening, intensity stretch, CLAHE, cropping and resampling in millimetres, one logged recipe. | [docs/preprocessing.md](docs/preprocessing.md) |
-| `octatools.faz` | Two FAZ detectors: a Python 3 port of [Díaz et al.](https://github.com/macarenadiaz/FAZ_Extraction) and a vessel-mask method. Area, perimeter, circularity, acircularity, axis ratio, axial-length scaling. | [docs/faz.md](docs/faz.md) |
-| `octatools.vessels` | Classical ridge filters (Sato, Frangi, Meijering) with hysteresis, and the network of [Kreitner et al.](https://github.com/aiforvision/OCTA-autosegmentation) with tiling for larger fields. | [docs/vessel_segmentation.md](docs/vessel_segmentation.md) |
-| `octatools.biomarkers` | Vessel area, skeleton and length density, mean width, fractal dimension, tortuosity, in ETDRS-style regions with and without the FAZ. | [docs/biomarkers.md](docs/biomarkers.md) |
-| `octatools.simulate` | A phantom with known vessels and FAZ, and controlled degradations (noise, blur, lines, black bands, signal loss) for testing. | |
-| [**OCTA primer**](docs/octa_primer.md) | What OCTA measures, SVC, DVC, ICP, DCP, the FAZ, artifacts, how vessel density is defined and why it depends on so much. | [docs/octa_primer.md](docs/octa_primer.md) |
+| `octatools.qc` | Checks for artifacts and poor signal, then returns a quality score with reasons. You can compare its measurements with your own image grades to choose thresholds. | [docs/qc.md](docs/qc.md) |
+| `octatools.preprocessing` | Prepares images through line repair, denoising, background correction, and contrast adjustment. It also supports cropping and resampling in physical units and records the steps applied. | [docs/preprocessing.md](docs/preprocessing.md) |
+| `octatools.faz` | Estimates the FAZ from the image or a vessel mask and measures its area and shape. The image-based detector is a Python 3 port of the method by [Díaz et al.](https://github.com/macarenadiaz/FAZ_Extraction). | [docs/faz.md](docs/faz.md) |
+| `octatools.vessels` | Segments vessels using classical ridge filters or the pretrained network by [Kreitner et al.](https://github.com/aiforvision/OCTA-autosegmentation). The network processes larger fields as smaller tiles. | [docs/vessel_segmentation.md](docs/vessel_segmentation.md) |
+| `octatools.biomarkers` | Measures vessel density, width, and network structure within regions based on the ETDRS grid. It can also exclude the FAZ from each region. | [docs/biomarkers.md](docs/biomarkers.md) |
+| `octatools.simulate` | Generates a test image with known vessel and FAZ masks, then adds controlled artifacts to help you check the analysis. | [docs/simulation.md](docs/simulation.md) |
+| [**OCTA primer**](docs/octa_primer.md) | Explains what OCTA measures, how retinal layers are represented, and why artifacts and analysis choices affect vessel measurements. | [docs/octa_primer.md](docs/octa_primer.md) |
 
 <p align="center">
   <img src="assets/retina_layers.png" width="62%" alt="Schematic of retinal layers and the three capillary plexuses, with SVC and DVC brackets.">
@@ -40,53 +40,94 @@ It works on **single 2-D en-face slabs** (a superficial or deep image exported f
 
 **Fig. 2 | Where the capillary plexuses sit.** Schematic, not to scale. The superficial vascular plexus (SVP, red) lies in the nerve fibre and ganglion cell layers and forms the superficial vascular complex (SVC). The intermediate (ICP, orange) and deep (DCP, purple) capillary plexuses at the inner nuclear layer borders together form the deep vascular complex (DVC). The dashed line marks where many devices split their two exported slabs; the exact boundary differs by device. NFL, nerve fibre layer; GCL, ganglion cell layer; IPL, inner plexiform layer; INL, inner nuclear layer; OPL, outer plexiform layer; ONL, outer nuclear layer; RPE, retinal pigment epithelium; CC, choriocapillaris. Details in the [primer](docs/octa_primer.md).
 
-## Quick start
+## Install and run your first analysis
+
+Use Python 3.10 or later. Run these commands in a terminal to clone the repository and install the package in a virtual environment:
 
 ```bash
 git clone https://github.com/rdharini2001/Awesome_OCTA_Tools.git
 cd Awesome_OCTA_Tools
-pip install -e .                 # core: numpy, scipy, scikit-image, opencv
-pip install -e ".[deep]"         # optional: torch + monai for the learned vessel model
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
 ```
 
-Run everything on the included example (a simulated scan):
+On Windows, activate the environment with `.venv\Scripts\activate` instead. Keep the environment active when running the commands below.
+
+The core installation includes everything needed for the classical analysis. Try it on an included simulated scan:
 
 ```bash
 python examples/quickstart.py
 ```
 
-On your own scans, tell the tools how wide the scan is. Most functions need `fov_mm` so that filter sizes and regions are in real units.
+The example prints the quality grade, FAZ measurements when a FAZ is found, and vessel measurements for several regions. It uses classical vessel segmentation and does not download model weights. To save a results table and images that you can inspect, run:
 
 ```bash
-octatools qc          scans/ --fov-mm 6 --csv qc.csv
-octatools preprocess  scans/ --fov-mm 6 --preset vessel --out outputs/pre
-octatools faz         scans/ --fov-mm 6 --method vessels --out outputs/faz
-octatools vessels     scans/ --fov-mm 6 --method learned  --out outputs/vessels   # downloads weights once
-octatools run         scans/ --fov-mm 6 --eye OD --out outputs/all                 # all steps, one CSV
+octatools run examples/data/synthetic_20230216_232653.png --fov-mm 3 --eye OD --out outputs/example
 ```
 
-The same from Python:
+Open `outputs/example/results.csv` for the measurements and `outputs/example/synthetic_20230216_232653_summary.png` for a panel showing the original image, the preprocessed image, and the segmentation overlay. Check the overlay before interpreting the numbers. The sample is simulated and demonstrates how the software works; it does not establish accuracy on patient scans.
+
+### Prepare your own images
+
+Use a single 2-D en-face slab exported as PNG, TIFF, JPEG, or BMP, with bright vessels on a dark background. Remove labels, colour bars, and scanner interface elements before analysis. `io.read_image` converts the file to a grayscale floating-point array in the range [0, 1].
+
+Set `--fov-mm` to the physical width of the image you supply. For a square 6 × 6 mm export, use `--fov-mm 6`; for the bundled 3 × 3 mm examples, use `--fov-mm 3`. The tools assume equal pixel spacing in both directions. If you crop an image outside the package, update the field of view to match the crop.
+
+Each image command accepts either one image file or a folder. Folder processing reads supported images directly inside that folder and does not search subfolders. Keep source scans separate from masks and generated outputs so they are not analysed as new scans.
+
+### Run individual steps
+
+These examples assume `scans/` contains 6 × 6 mm images. Each command starts from those source images; you do not need to run the preceding command first.
+
+```bash
+octatools qc scans/ --fov-mm 6 --csv outputs/qc.csv
+octatools preprocess scans/ --fov-mm 6 --preset vessel --out outputs/pre
+octatools vessels scans/ --fov-mm 6 --method classical --preprocess --out outputs/vessels
+octatools faz scans/ --fov-mm 6 --method vessels --out outputs/faz
+octatools run scans/ --fov-mm 6 --eye OD --skip-rejected --out outputs/all
+```
+
+The `vessels` command preprocesses its input only when you add `--preprocess`. The `faz` and `run` commands apply their own preprocessing. The full pipeline records QC for every image and continues with rejected images unless you add `--skip-rejected`. Use `OD` for a right eye and `OS` for a left eye, and process the two eyes separately when setting this option for a folder.
+
+There is no separate biomarkers command. `octatools run` writes whole-image and FAZ-excluded parafoveal measurements to `results.csv`; the Python API provides the full set of regions. For details on saved files and options, see the [running guide](docs/running.md), or use `octatools <command> --help`.
+
+### Use the Python API
+
+Run this from the repository root, or replace the example path with your own scan and set its field of view:
 
 ```python
 from octatools import io
-from octatools.qc import assess
-from octatools.preprocessing import preprocess, preset
-from octatools.vessels import segment_classical
-from octatools.faz import faz_from_vessels, faz_metrics
-from octatools.biomarkers import quantify
+from octatools.analyze import analyze
 
-img = io.read_image("scan.png")                       # float32 in [0, 1], vessels bright
-report = assess(img, fov_mm=6.0)                      # "good" / "acceptable" / "reject", with reasons
-pre = preprocess(img, preset("vessel", fov_mm=6.0))   # pre.steps records what was applied
-seg = segment_classical(pre.image, fov_mm=6.0)
-faz = faz_from_vessels(seg.mask, fov_mm=6.0)
-table = quantify(seg.mask, 6.0, faz=faz.mask, eye="OD")
-table["parafovea_noFAZ"]["vessel_area_density"]
+img = io.read_image("examples/data/synthetic_20230216_232653.png")
+result = analyze(img, fov_mm=3.0, eye="OD")
+
+print(result.qc.grade, result.qc.flags)
+print(result.biomarkers["whole"]["vessel_area_density"])
+if result.faz is not None:
+    print("FAZ area (mm²):", result.faz_stats["area_mm2"])
+else:
+    print(result.notes)
 ```
+
+The module guides show how to call each stage separately and adjust its settings.
+
+### Add the learned vessel model
+
+Install the optional dependencies and download the pretrained weights before running inference:
+
+```bash
+python -m pip install -e ".[deep]"
+octatools weights
+octatools vessels scans/ --fov-mm 6 --method learned --out outputs/learned
+```
+
+The first download requires internet access. Inference uses the CPU by default; use `--device cuda` if your PyTorch installation supports an available CUDA GPU. See the [vessel segmentation guide](docs/vessel_segmentation.md) for training-domain limits, tiling, and weight-cache settings.
 
 ## Quality control
 
-Poor scans produce confident, wrong numbers. The quality module is the part of this repository that was developed against real scans, because its first version was too forgiving: it scored the fraction of affected rows, and a single dark line with a misregistered strip below it touches only a percent of the rows while ruining the image. It now counts line events and detects abrupt row-to-row jumps.
+Image quality affects every later measurement. A dim scan can lose visible capillaries, while motion can break or displace vessels. The quality module checks for these problems and returns a score, a grade, and the reasons behind the grade. It counts separate line artifacts and detects abrupt changes between neighbouring rows, because even a small affected part of an image can disrupt its vessel network.
 
 <p align="center">
   <img src="assets/qc_degradations.png" width="98%" alt="Quality score as a simulated scan is degraded by noise, blur, lines, a black band and signal loss.">
@@ -96,25 +137,25 @@ Poor scans produce confident, wrong numbers. The quality module is the part of t
 
 The cut-offs are starting points set from simulations and checked by eye, not validated against expert grades. [Fit them to your own graded images](docs/qc.md#these-cut-offs-are-starting-points) before using them for exclusion in a study.
 
-## Things worth knowing before you trust a number
+## Interpret the results
 
 - **Treat automatic FAZ outlines as proposals.** The two detectors can differ noticeably even on a clean scan (0.37 and 0.55 mm² on the example in Fig. 1), and more on weak ones. Always look at the overlay. See [docs/faz.md](docs/faz.md).
 - **The learned vessel model was trained on 3 × 3 mm scans.** Larger fields are tiled. The bundled example images are from its own simulated training domain and say nothing about accuracy on patients. See [docs/vessel_segmentation.md](docs/vessel_segmentation.md).
-- **The classical vessel defaults** were picked on three simulated images. Check the overlay on your data.
+- **The classical vessel defaults were selected using three simulated images.** Inspect their results on your own scans before choosing the settings for an analysis.
 - **Vessel density depends on the pipeline** (threshold, filtering, signal strength, slab definition, axial length). Compare numbers only between runs that share all of these.
-- **Segmentation errors in the scanner's layers are invisible here.** That needs the volume.
+- **Layer-boundary errors require review of the OCT volume.** An exported en-face image cannot show whether the scanner placed those boundaries correctly.
 
-## Checks that back the code
+## Check your installation and reproduce the figures
 
 ```bash
 pip install -e ".[dev]"
-pytest -m "not deep"                       # unit tests, a few seconds each
+pytest -m "not deep and not network"       # core tests without model downloads
 pytest -m deep                             # learned model; needs torch, monai and the weights
 python scripts/make_figures.py             # rebuilds everything in assets/
 python scripts/verify_against_upstream.py --upstream /path/to/OCTA-autosegmentation --images examples/data
 ```
 
-The last script runs the authors' own `test.py` and the wrapper in this repository on the same images. On the three example images the masks agree exactly (Dice 1.0000 at the model's 1216 × 1216 resolution). The tests use a procedural phantom with known vessels and FAZ, so measured areas, densities, skeleton lengths and fractal dimensions are checked against exact answers.
+The last script runs the authors' own `test.py` and the wrapper in this repository on the same images. On the three example images the masks agree exactly (Dice 1.0000 at the model's 1216 × 1216 resolution). The tests also use procedural images and simple shapes with known properties to check areas, densities, skeleton lengths, and fractal dimensions. These checks test implementation behavior; they do not establish performance on clinical images.
 
 ## Layout
 

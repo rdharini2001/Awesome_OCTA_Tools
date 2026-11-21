@@ -1,6 +1,6 @@
 # Third-party work
 
-This repository builds on the work of others. Please cite them when you use the matching part.
+This repository includes a port of an existing FAZ detector, an inference wrapper for a published vessel model, and examples from the model authors’ synthetic dataset. The sections below explain where each component comes from and how it is attributed. Please cite the original authors when using these components in your work.
 
 ## FAZ detection: Díaz et al.
 
@@ -16,7 +16,7 @@ The OCTAGON dataset that goes with the method is available from the authors on r
 
 ## Vessel segmentation: Kreitner et al.
 
-`src/octatools/vessels/synthetic.py` runs the network of Kreitner et al. Nothing from that repository is copied into the package except a re-implementation of its inference steps. The weights are downloaded from the authors' repository at a fixed commit and verified by hash.
+`src/octatools/vessels/synthetic.py` runs the network of Kreitner et al. The wrapper reimplements the authors’ inference steps; model weights are obtained separately. The weights are downloaded from the authors' repository at a fixed commit and verified by hash.
 
 - Code and weights: <https://github.com/aiforvision/OCTA-autosegmentation> (MIT, © 2023 Linus Kreitner; licence copy in `third_party/LICENSE-OCTA-autosegmentation`)
 - L. Kreitner, J. C. Paetzold, N. Rauch, C. Chen, A. M. Hagag, A. E. Fayed, S. Sivaprasad, S. Rausch, J. Weichsel, B. H. Menze, M. Harders, B. Knier, D. Rueckert, M. J. Menten. *Synthetic optical coherence tomography angiographs for detailed retinal vessel segmentation without human annotations.* IEEE Transactions on Medical Imaging 43(6): 2061–2073, 2024. <https://doi.org/10.1109/TMI.2024.3354408>
@@ -26,7 +26,7 @@ The three images and labels in `examples/data/` are samples from the authors' sy
 
 ## Software this package depends on
 
-NumPy, SciPy, scikit-image, OpenCV, and (optionally) PyTorch and MONAI. Their licences are permissive; see each project.
+NumPy, SciPy, scikit-image, OpenCV, and (optionally) PyTorch and MONAI. Refer to each project for its licence and attribution requirements.
 
 ## Methods implemented from the literature
 

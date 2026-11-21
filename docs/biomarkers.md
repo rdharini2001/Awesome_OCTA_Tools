@@ -1,15 +1,42 @@
 # Biomarkers
 
-[`octatools.biomarkers`](../src/octatools/biomarkers) turns a binary vessel mask into numbers. Nothing here segments vessels. If the mask is wrong the numbers are wrong, and the mask depends on the threshold or model that made it. Fix those, then report them with the result (Mehta et al. 2019, Rabiolo et al. 2018).
+[`octatools.biomarkers`](../src/octatools/biomarkers) measures the area, length, width, and structure of vessels in a binary mask. It takes an existing segmentation, so inspect that mask before calculating measurements. The threshold or model used to create it is part of the measurement method and should be reported with the results (Mehta et al. 2019, Rabiolo et al. 2018).
 
 ```python
+from octatools import io
+from octatools.preprocessing import preprocess, preset
+from octatools.vessels import segment_classical
+from octatools.faz import faz_from_vessels
 from octatools.biomarkers import quantify, vessel_metrics, etdrs_regions
 
-table = quantify(vessels, fov_mm=6.0, faz=faz_mask, eye="OD")
-table["parafovea_noFAZ"]["vessel_area_density"]
+img = io.read_image("examples/data/synthetic_20230216_232653.png")
+fov_mm = 3.0
+pre = preprocess(img, preset("vessel", fov_mm))
+vessels = segment_classical(pre.image, fov_mm).mask
+faz = faz_from_vessels(vessels, fov_mm)
+faz_mask = faz.mask if faz.found else None
 
-vessel_metrics(vessels, 6.0, roi=my_region_mask, exclude=faz_mask)   # one region, your mask
+table = quantify(vessels, fov_mm=fov_mm, faz=faz_mask, eye="OD")
+print(table["parafovea"]["vessel_area_density"])
+if faz.found:
+    print(table["parafovea_noFAZ"]["vessel_area_density"])
+
+# Measure a single region using the same vessel mask.
+regions = etdrs_regions(vessels.shape, fov_mm)
+print(vessel_metrics(vessels, fov_mm, roi=regions["parafovea"], exclude=faz_mask))
 ```
+
+Run the example from the repository root after installing the core package. `vessels` must be a 2-D boolean mask in which `True` means vessel. Any FAZ or region mask must use the same shape and pixel coordinates. If you load a saved black-and-white mask, convert it explicitly with `io.read_image("vessels.png") > 0.5`.
+
+`quantify` returns a dictionary of region names, each containing a dictionary of measurements. Density fractions are between 0 and 1; multiply by 100 to express them as percentages. Regions ending in `_noFAZ` are available only when a FAZ mask is supplied.
+
+To save the standard measurements without writing Python code, run:
+
+```bash
+octatools run examples/data/synthetic_20230216_232653.png --fov-mm 3 --eye OD --out outputs/biomarkers
+```
+
+Open `outputs/biomarkers/results.csv` for whole-image and FAZ-excluded parafoveal measurements. Use the Python API for all regions, custom masks, or topology measures.
 
 ## Measures
 
@@ -24,18 +51,18 @@ vessel_metrics(vessels, 6.0, roi=my_region_mask, exclude=faz_mask)   # one regio
 | `n_branches`, `n_junction_pixels` | branch and junction counts from the skeleton | rough measures of network complexity |
 | `region_area_mm2` | area of the region analysed | |
 
-The topology measures (`tortuosity`, branch counts) are off by default in `quantify` because they are the slowest. Turn them on with `with_topology=True`.
+The topology measures, including tortuosity and branch counts, take more time to compute and are disabled by default in `quantify`. Set `with_topology=True` when you need them.
 
 ### Details that change the numbers
 
-- **Skeleton length.** Counts orthogonal links as 1 and diagonal links as √2, and skips a diagonal link that only short-cuts an L-shaped corner. A straight horizontal line of N pixels has length N − 1, a diagonal of N pixels (N − 1)·√2. The skeleton is computed on the *whole* mask and then restricted to the region, so vessels are not cut at the region border.
+- **Skeleton length accounts for the direction of each link.** The calculation counts orthogonal links as 1 and diagonal links as √2, while skipping diagonal links that would cut across an L-shaped corner. A straight horizontal line of N pixels has length N − 1, while a diagonal line of N pixels has length (N − 1)·√2. The skeleton is computed on the *whole* mask and then restricted to the region, so vessels are not cut at the region border.
 - **Tortuosity.** The skeleton is split at junctions (pixels with three or more neighbours, plus their neighbours). Each branch is walked from one end to the other. The result is arc length over end-to-end distance, so a straight branch gives 1.0. Very short branches are ignored because on a pixel grid their ratio is dominated by quantisation. Small spurs from skeletonising a ragged mask inflate branch counts; `octatools.skeleton.prune` removes terminal branches below a length you choose.
-- **Fractal dimension.** Counts occupied boxes at sizes from 2 pixels to a quarter of the shorter side and fits log N against log(1/size). A filled square gives about 2 and a single line about 1; vessel masks fall between. The dimension depends on the field of view and resolution, so only compare it between scans of the same kind.
+- **Fractal dimension describes how the mask fills space.** The calculation counts occupied boxes at sizes from 2 pixels to a quarter of the shorter image dimension, then fits log N against log(1/size). A filled square gives about 2 and a single line about 1; vessel masks fall between. The dimension depends on the field of view and resolution, so only compare it between scans of the same kind.
 - **Width.** `mean_vessel_width_um` is only as accurate as the mask. Dilated masks give wider vessels; thin masks give thin ones. Use it to compare methods on the same data, not as a calibre measurement.
 
 ## Regions
 
-`etdrs_regions(shape, fov_mm, center_px=None, eye=None)` returns boolean masks centred on the fovea (or on `center_px`):
+`etdrs_regions(shape, fov_mm, center_px=None, eye=None)` returns boolean masks centred on the image by default. Set `center_px=(row, column)` to place them at a known foveal location:
 
 | name | what |
 |---|---|
@@ -49,11 +76,11 @@ The rings follow the ETDRS grid. Parts of a ring that fall outside the image are
 
 **Nasal and temporal depend on the device's display convention.** The default assumes fundus-style orientation: for a right eye (OD) nasal is on the right of the image, for a left eye (OS) on the left. Some exports are mirrored. Check one image where the optic disc or a known landmark is visible and pass `nasal_side="left"` or `"right"` explicitly if the default is wrong.
 
-`quantify` also reports each region with the FAZ removed, as `<region>_noFAZ`. A large FAZ extends into the parafoveal ring and lowers its density, so the "no FAZ" version separates capillary dropout from a larger avascular zone.
+`quantify` also reports each region with the FAZ removed, as `<region>_noFAZ`. A FAZ that extends into the parafoveal ring changes the area available for vessels. Reporting both versions helps show how excluding that region affects the density; it does not by itself establish the cause of a low measurement.
 
-## Things to keep in mind
+## Compare measurements consistently
 
 - **Quality first.** Vessel density falls with signal strength even in healthy eyes (Lim et al. 2018, Yu et al. 2019). Run [`octatools.qc`](qc.md) and drop or flag images below your floor before any group comparison.
 - **Use the same slab and device.** Plexus boundaries differ between instruments (Spaide and Curcio 2017).
-- **Axial length.** Lengths and areas scale with it. Correct, or at least record it (Linderman et al. 2017, Sampson et al. 2017). See [faz.md](faz.md).
-- **Model trained on 3 mm.** The learned segmenter was trained on 3 × 3 mm scans. Measures from its tiled output on larger scans are plausible but should be validated against your own reference before use. See [vessel_segmentation.md](vessel_segmentation.md).
+- **Axial length affects physical scale.** Record it and account for ocular magnification when comparing lengths or areas (Linderman et al. 2017, Sampson et al. 2017). See [faz.md](faz.md).
+- **The learned model was trained on 3 × 3 mm scans.** Check measurements from its tiled output on larger fields against your own reference masks before relying on them. See [vessel_segmentation.md](vessel_segmentation.md).

@@ -1,31 +1,41 @@
 # Preprocessing
 
-[`octatools.preprocessing`](../src/octatools/preprocessing) holds small, separate steps and one recipe that chains them. Each step does one thing and can be used alone.
+[`octatools.preprocessing`](../src/octatools/preprocessing) prepares en-face images for segmentation. You can use each operation independently or apply a preset that combines them in a fixed order. Start with a preset, inspect the result, and adjust only the steps that help your data.
 
 ```python
 from octatools import io
 from octatools.preprocessing import preprocess, preset
 
-img = io.read_image("scan.png")                       # float32 in [0, 1], vessels bright
-out = preprocess(img, preset("vessel", fov_mm=6.0))
-out.image, out.valid, out.steps                       # result, valid-pixel mask, what was applied
+img = io.read_image("examples/data/synthetic_20230216_232653.png")
+out = preprocess(img, preset("vessel", fov_mm=3.0))
+io.save_image("outputs/preprocessed.png", out.image)
+print(out.steps)  # Operations and settings applied to this image.
+# out.valid is the boolean mask of pixels treated as valid.
 ```
 
-The recipe always runs in this order: crop, resample, destripe, denoise, flatten, stretch, optional CLAHE. The order matters. Line repair comes before denoising so a smoothing filter does not spread a line into its neighbours, and background flattening comes after denoising so noise does not leak into the background estimate.
+Run the Python example from the repository root after [installing the package](../README.md#install-and-run-your-first-analysis). To use the command line instead:
 
-## Why preprocess at all, and when not to
+```bash
+octatools preprocess examples/data/synthetic_20230216_232653.png --fov-mm 3 --preset vessel --out outputs/pre
+```
 
-Preprocessing here serves two jobs: making a **segmentation** easier, and making images from different scans look more alike. It is not meant to prepare an image for **intensity-based quantification**. Brightness, contrast and binarisation choices change vessel density numbers (Mehta et al. 2019, Rabiolo et al. 2018), so measure on a mask from a fixed, documented pipeline and not on a contrast-stretched copy.
+This saves `outputs/pre/synthetic_20230216_232653_vessel.png` and prints the applied steps. The CLI saves the processed image; use the Python result if you also need the valid-pixel mask or want to save the step history. For your own images, replace the path and field of view together.
 
-If your data already come denoised and normalised by the vendor, use the `minimal` preset and see what you gain before adding anything.
+The recipe runs enabled steps in this order: crop, resample, destripe, denoise, flatten, stretch, optional CLAHE. The order matters. Line repair comes before denoising so a smoothing filter does not spread a line into its neighbours, and background flattening comes after denoising so noise does not leak into the background estimate.
+
+## Decide which preparation steps you need
+
+Preprocessing can make vessel and FAZ boundaries easier to segment and reduce differences in image appearance between scans. It is not meant to prepare an image for **intensity-based quantification**. Brightness, contrast and binarisation choices change vessel density numbers (Mehta et al. 2019, Rabiolo et al. 2018), so measure on a mask from a fixed, documented pipeline and not on a contrast-stretched copy.
+
+If the vendor has already denoised and normalised your images, begin with the `minimal` preset. Compare the results before adding further filtering or contrast adjustment.
 
 ## Steps
 
-### Valid-pixel mask — `valid_mask`
+### Identify valid pixels with `valid_mask`
 
 Registration of repeated scans and blinks leave black areas along the border. A dark area counts as missing only if it touches the image border and is larger than a small fraction of the image. The avascular zone and genuine dropout inside the field stay valid. Every later step that averages over the image (flattening, percentile stretch, the quality module) uses this mask so the black border does not pull the statistics down.
 
-### Crop and resample — `center_crop_mm`, `resample_to_pixel_size`
+### Crop and resample with `center_crop_mm` and `resample_to_pixel_size`
 
 Both take sizes in millimetres or micrometres. Cropping a 6 × 6 mm scan to its central 3 × 3 mm is the usual way to make it look like the scans many segmentation networks were trained on. Resampling downsamples with anti-aliasing. Use `order=0` for masks.
 
@@ -37,7 +47,7 @@ What to expect:
 
 - Thin lines of one to a few rows are repaired well.
 - A wide band cannot be recovered. Interpolating across it only hides it. The quality module reports the longest run so you can reject such images instead.
-- The repair invents no vessels, but it smooths across any vessel running through the line. Do not quantify capillaries in the repaired rows.
+- The repair interpolates intensities across missing rows and cannot recover the original vessel structure. Avoid interpreting capillary measurements in repaired rows as observed anatomy.
 - Pass `axis=1` if the fast axis is vertical in your export.
 
 This detector looks at the exported image. Methods that correct motion from the raw volume, using orthogonal scans or per-A-scan registration, are better when you have the volume (Kraus et al. 2012).
@@ -53,7 +63,7 @@ This detector looks at the exported image. Methods that correct motion from the 
 | `tv` | total variation; makes flat regions very clean, can leave a painted look |
 | `diffusion` | Perona–Malik anisotropic diffusion (1990); stops smoothing at strong gradients |
 
-OCTA noise is not Gaussian. Decorrelation noise gives the background a bright grainy floor, and signal loss makes it worse. None of these filters remove it. They reduce its variance. If a segmentation model has only seen clean images, even a light filter often helps; check by eye on your own data.
+OCTA noise is not Gaussian. Decorrelation noise gives the background a bright grainy floor, and signal loss makes it worse. These filters reduce the variation caused by noise, but they cannot restore flow information that was not captured. If a segmentation model has only seen clean images, even a light filter often helps; check by eye on your own data.
 
 ### Background flattening — `flatten_background`
 
@@ -79,4 +89,4 @@ Build your own with `PreprocessConfig(...)` or override one setting: `preset("ve
 
 ## Reproducibility
 
-`preprocess` returns the list of applied steps with their parameters (`out.steps`). Save it with your outputs.
+`preprocess` returns the list of applied steps with their parameters (`out.steps`). Save it with your outputs and keep the preset settings consistent across scans you plan to compare. If you crop from 6 mm to 3 mm, pass the new 3 mm field of view to downstream segmentation and measurement functions.

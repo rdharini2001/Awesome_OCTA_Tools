@@ -1,10 +1,10 @@
-# OCTA in one sitting
+# Understanding OCTA images and measurements
 
-This is the background you need to use the tools in this repository without misreading their output. It is a working summary, not a review. The reviews it leans on are Spaide et al. 2018, Kashani et al. 2017 and Hormel et al. 2021; full references are in [references.md](references.md).
+This guide introduces the image types, anatomy, and measurement conventions used throughout the package. Read it before interpreting results if you are new to OCTA, or use the glossary to look up an unfamiliar abbreviation. The explanations draw on Spaide et al. 2018, Kashani et al. 2017, and Hormel et al. 2021; full citations are in [references.md](references.md). For installation and commands, see the [running guide](running.md).
 
 ## What OCTA measures
 
-Optical coherence tomography (OCT) records how much near-infrared light is scattered back from each depth in the tissue. Optical coherence tomography angiography (OCTA) adds one trick: it scans the same spot several times in quick succession and looks at what changed.
+Optical coherence tomography (OCT) records how much near-infrared light is scattered back from each depth in the tissue. Optical coherence tomography angiography (OCTA) uses repeated scans of the same location to detect changes in the signal over a short interval.
 
 Static tissue returns almost the same signal every time. Inside a vessel, red blood cells move between repeats, so the backscattered signal fluctuates. The amount of change is the **flow signal**, and no dye is needed (de Carlo et al. 2015, Chen and Wang 2017).
 
@@ -25,9 +25,9 @@ Two consequences matter for everything downstream:
 
 ## From a 3-D volume to the picture you are given
 
-Each scan is a volume of flow signal. To look at it, the volume is cut into **slabs** between two segmentation surfaces (for example the inner limiting membrane and the inner plexiform layer) and each slab is collapsed to a 2-D **en-face** image, usually by a maximum or mean projection along depth.
+Each scan is a volume of flow signal. To display it, the volume is divided into **slabs** between two segmentation surfaces (for example the inner limiting membrane and the inner plexiform layer) and each slab is collapsed to a 2-D **en-face** image, usually by a maximum or mean projection along depth.
 
-Two things follow:
+The exported image therefore depends on two choices:
 
 1. The picture depends on where the surfaces were drawn. A segmentation error moves vessels from one slab to another, or lets another layer leak in.
 2. Instruments with the same slab name do not use the same boundaries. Spaide and Curcio (2017) compared "superficial" and "deep" layers across devices and found clear differences. Never compare vessel measures across devices without a reason to believe the slabs are equivalent.
@@ -52,12 +52,12 @@ Within the macula the retinal capillaries are organised in plexuses at different
 | **RPC** | radial peripapillary capillaries | nerve fibre layer around the optic disc |
 | **CC** | choriocapillaris | just below Bruch's membrane, outside the retina |
 
-The picture is simplest in the "two-slab" world most commercial instruments still export:
+Many commercial exports group the retinal vasculature into two slabs:
 
 - a **superficial** image, which is mostly the SVP/SVC, and
 - a **deep** image, which is meant to be the ICP and DCP (the DVC) but whose exact boundaries depend on the vendor.
 
-Research systems that segment three plexuses separately (Campbell et al. 2017, Garrity et al. 2017) show that the deep complex really is two layers with different patterns. When a paper says "SVC and DVC" it usually means these two slabs. When it says "SCP and DCP" it usually means the same thing with older vocabulary.
+Research systems that segment three plexuses separately (Campbell et al. 2017, Garrity et al. 2017) show that the intermediate and deep plexuses have distinct vascular patterns. When a paper says "SVC and DVC" it usually means these two slabs. When it says "SCP and DCP" it usually means the same thing with older vocabulary.
 
 Retinal layer abbreviations used above and in the docs: ILM internal limiting membrane, NFL nerve fibre layer, GCL ganglion cell layer, IPL inner plexiform layer, INL inner nuclear layer, OPL outer plexiform layer, ONL outer nuclear layer, RPE retinal pigment epithelium.
 
@@ -65,7 +65,7 @@ Retinal layer abbreviations used above and in the docs: ILM internal limiting me
 
 The **FAZ** is the capillary-free region at the centre of the fovea. It is the most commonly reported OCTA shape measure: area, perimeter and how far from circular it is.
 
-Things worth knowing before you compare numbers:
+Before comparing FAZ measurements, check the following:
 
 - Healthy values vary widely between people and between devices; many reports of the superficial-slab area fall roughly between 0.2 and 0.4 mm², but check the source for the slab, device and method (Shahlaee et al. 2016, Magrath et al. 2017).
 - The outline differs between slabs. Always say which slab you measured.
@@ -82,9 +82,9 @@ Pixel size follows from field of view and sampling:
 pixel size (µm) = field of view (mm) × 1000 / pixels across
 ```
 
-For example a 3 × 3 mm scan sampled at 304 pixels is 9.9 µm per pixel and a 6 × 6 mm scan at 400 pixels is 15 µm per pixel (those are the sizes in the OCTA-500 dataset, Li et al. 2020). The lateral optical resolution of most systems is coarser than the sampling, so adjacent pixels are not independent.
+For example, a 3 × 3 mm scan sampled at 304 pixels is 9.9 µm per pixel and a 6 × 6 mm scan at 400 pixels is 15 µm per pixel (those are the sizes in the OCTA-500 dataset, Li et al. 2020). The lateral optical resolution of most systems is coarser than the sampling, so adjacent pixels are not independent.
 
-This is why most functions here take `fov_mm`: filter scales, minimum object sizes and region radii are written in micrometres or millimetres and converted, so the same call works on a 3 mm and a 6 mm image.
+Most functions therefore require `fov_mm`, the physical width of the supplied image. They convert filter scales, minimum object sizes, and region radii from physical units into pixels. Entering the correct width keeps those settings consistent across scan sizes. Resampling can change the pixel spacing, but it cannot add anatomical detail to an image.
 
 ## What goes wrong
 
@@ -113,7 +113,7 @@ Three families of metrics are common, and papers use confusing names for them:
 | Total vessel length per area | vessel length density, "vessel density" in Zeiss output | skeletonise, sum skeleton length, divide by area |
 | Average vessel calibre | vessel diameter index | vessel area over skeleton length |
 
-Chu et al. 2016 name the first two VAD and VSD. Rabiolo et al. 2018 compare quantification methods on the same scans and show the numbers move with the method.
+Chu et al. 2016 use VAD for the area fraction and VSD for the skeleton-pixel fraction. Skeleton-pixel density and physical vessel length per area are related but distinct; this package reports both explicitly. Rabiolo et al. 2018 compare quantification methods on the same scans and show the numbers move with the method.
 
 Cautions that apply to every one of these:
 
@@ -153,7 +153,7 @@ See [biomarkers.md](biomarkers.md) for the exact definitions used here.
 
 ## Where to read more
 
-- Spaide, Fujimoto, Waheed, Sadda, Staurenghi. *Optical coherence tomography angiography.* Prog Retin Eye Res 2018. The best single overview.
+- Spaide, Fujimoto, Waheed, Sadda, Staurenghi. *Optical coherence tomography angiography.* Prog Retin Eye Res 2018. A broad introduction to OCTA acquisition, interpretation, and applications.
 - Kashani et al. *Optical coherence tomography angiography: a comprehensive review of current methods and clinical applications.* Prog Retin Eye Res 2017.
 - Hormel et al. *Plexus-specific retinal vascular anatomy and pathologies as seen by projection-resolved optical coherence tomographic angiography.* Prog Retin Eye Res 2021.
 - Spaide, Fujimoto, Waheed. *Image artifacts in optical coherence tomography angiography.* Retina 2015.

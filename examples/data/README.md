@@ -1,4 +1,19 @@
-Three simulated 3 x 3 mm OCTA images (304 x 304) with their vessel labels (1216 x 1216), taken unchanged from the
-synthetic dataset of Kreitner et al. (2024), <https://github.com/aiforvision/OCTA-autosegmentation>, MIT licence.
-They are generated images, not patient data, and they come from the training domain of the learned vessel model.
-Use them to check that the code runs, not to judge accuracy on real scans.
+# Example OCTA images
+
+This folder contains three simulated 3 × 3 mm OCTA images at 304 × 304 pixels and their corresponding vessel labels at 1216 × 1216 pixels. They are taken unchanged from the synthetic dataset released by [Kreitner et al. (2024)](https://github.com/aiforvision/OCTA-autosegmentation) and are redistributed under the authors’ MIT licence. Attribution and publication details are in [THIRD_PARTY.md](../../THIRD_PARTY.md).
+
+These are generated images rather than patient scans. They come from the training domain of the learned vessel model, so use them to check installation and understand the outputs. They cannot establish performance on clinical data.
+
+From the repository root, run the default example:
+
+```bash
+python examples/quickstart.py
+```
+
+To save measurements and a summary panel for one image, run:
+
+```bash
+octatools run examples/data/synthetic_20230216_232653.png --fov-mm 3 --eye OD --out outputs/example
+```
+
+Use `--fov-mm 3` for these images. The images and reference labels have different resolutions; align them to the same pixel grid before comparing masks, using nearest-neighbour interpolation for binary labels. Keep reference labels separate from scan inputs when processing folders.
