@@ -1,4 +1,4 @@
-<h1 align="center">Awesome OCTA Tools</h1>
+<h1 align="center">OCTA Analysis Tools</h1>
 
 <p align="center">
   Quality control, preprocessing, FAZ and vessel segmentation, and biomarkers for en-face OCT angiography,<br>
