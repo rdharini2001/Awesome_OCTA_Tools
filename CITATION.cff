@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it, and cite the original methods it builds on (see THIRD_PARTY.md)."
+title: "Awesome OCTA Tools"
+type: software
+authors:
+  - family-names: Raghavan
+    given-names: Dharini
+repository-code: "https://github.com/rdharini2001/Awesome_OCTA_Tools"
+license: MIT
+version: 0.1.0
+date-released: 2026-11-21
